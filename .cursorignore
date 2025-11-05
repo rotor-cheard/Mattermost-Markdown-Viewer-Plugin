@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+webapp/node_modules/
+
+# Build output
+dist/
+webapp/dist/
+*.tar.gz
+
+# Logs
+*.log
+
