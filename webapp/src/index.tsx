@@ -8,6 +8,15 @@ const marked = new Marked({
     gfm: true
 });
 
+// Harden rendered links: force external links to open safely and strip any
+// unsafe protocols that survive sanitization (e.g. javascript:, data:).
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A' && node.getAttribute('href')) {
+        node.setAttribute('target', '_blank');
+        node.setAttribute('rel', 'noopener noreferrer nofollow');
+    }
+});
+
 interface MarkdownPreviewProps {
     fileInfo: FileInfo;
 }
@@ -26,9 +35,16 @@ function MarkdownPreview({fileInfo}: MarkdownPreviewProps) {
                 if (!response.ok) throw new Error('Failed to load file');
                 const text = await response.text();
                 const html = await marked.parse(text);
+                // SECURITY: <img> is intentionally NOT allowed. Rendering
+                // user-supplied Markdown images lets a .md file force viewers'
+                // browsers to fetch remote hosts (tracking pixels / IP leaks).
+                // TODO: If we re-enable images, do it securely — e.g. restrict
+                // src to data: URIs only, or proxy/allowlist hosts server-side,
+                // or gate behind an explicit "load remote images" user action.
+                // Do NOT simply add 'img'/'src' back to the allowlists below.
                 const sanitized = DOMPurify.sanitize(html, {
-                    ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'ul', 'ol', 'li', 'a', 'strong', 'em', 'code', 'pre', 'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'img'],
-                    ALLOWED_ATTR: ['href', 'src', 'alt', 'class']
+                    ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'ul', 'ol', 'li', 'a', 'strong', 'em', 'code', 'pre', 'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr'],
+                    ALLOWED_ATTR: ['href', 'class']
                 });
                 setContent(sanitized);
             } catch (err) {
