@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - upgraded DOMPurify from 3.3.0 to 3.4.14, remediating known XSS vulnerabilities (incl. CVE-2026-0540, affecting 3.1.3–3.3.1)
-- disabled rendering of `<img>` tags so Markdown files can no longer force clients to fetch remote hosts (tracking pixels / IP disclosure); see note in webapp/src/index.tsx about re-enabling securely
+- restricted `<img>` rendering to embedded base64 `data:` raster images (png/jpeg/gif/webp/bmp); remote/relative image URLs and SVG data URIs are stripped, so Markdown files can no longer force clients to fetch remote hosts (tracking pixels / IP disclosure) or smuggle script via SVG
 - hardened rendered links with `target="_blank"` and `rel="noopener noreferrer nofollow"`
 
 ### Changed

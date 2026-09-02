@@ -8,12 +8,25 @@ const marked = new Marked({
     gfm: true
 });
 
-// Harden rendered links: force external links to open safely and strip any
-// unsafe protocols that survive sanitization (e.g. javascript:, data:).
+// Only embedded raster images (base64 data: URIs) are permitted. SVG data
+// URIs are rejected because they can carry scripts. Remote/relative URLs are
+// dropped so a .md file can't make viewers' browsers fetch external hosts
+// (tracking pixels / IP disclosure).
+const ALLOWED_IMG_SRC = /^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i;
+
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    // Harden rendered links: force external links to open safely.
     if (node.tagName === 'A' && node.getAttribute('href')) {
         node.setAttribute('target', '_blank');
         node.setAttribute('rel', 'noopener noreferrer nofollow');
+    }
+
+    // Enforce the embedded-image-only policy.
+    if (node.tagName === 'IMG') {
+        const src = node.getAttribute('src') || '';
+        if (!ALLOWED_IMG_SRC.test(src)) {
+            node.remove();
+        }
     }
 });
 
@@ -35,16 +48,15 @@ function MarkdownPreview({fileInfo}: MarkdownPreviewProps) {
                 if (!response.ok) throw new Error('Failed to load file');
                 const text = await response.text();
                 const html = await marked.parse(text);
-                // SECURITY: <img> is intentionally NOT allowed. Rendering
-                // user-supplied Markdown images lets a .md file force viewers'
-                // browsers to fetch remote hosts (tracking pixels / IP leaks).
-                // TODO: If we re-enable images, do it securely — e.g. restrict
-                // src to data: URIs only, or proxy/allowlist hosts server-side,
-                // or gate behind an explicit "load remote images" user action.
-                // Do NOT simply add 'img'/'src' back to the allowlists below.
+                // SECURITY: <img> is allowed, but only embedded raster images
+                // via base64 data: URIs — the afterSanitizeAttributes hook above
+                // strips any remote/relative/SVG src so a .md file cannot make
+                // viewers' browsers fetch external hosts (tracking pixels / IP
+                // disclosure). Remote-image support would need a server-side
+                // proxy+allowlist or an explicit "load remote images" opt-in.
                 const sanitized = DOMPurify.sanitize(html, {
-                    ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'ul', 'ol', 'li', 'a', 'strong', 'em', 'code', 'pre', 'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr'],
-                    ALLOWED_ATTR: ['href', 'class']
+                    ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'ul', 'ol', 'li', 'a', 'strong', 'em', 'code', 'pre', 'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'img'],
+                    ALLOWED_ATTR: ['href', 'src', 'alt', 'class']
                 });
                 setContent(sanitized);
             } catch (err) {
